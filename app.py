@@ -1,3 +1,4 @@
+
 from db import get_session, Users, Payments
 import bcrypt
 from PySide6.QtWidgets import (
@@ -227,7 +228,9 @@ class AddPaymentWindow(QDialog):
         if quantity <= 0:
             QMessageBox.warning(self, "Ошибка", "Количество должно быть положительным числом!")
             return
-
+        if(price<=0): 
+            QMessageBox.warning(self, "Ошибка", "Цена не можнт быть меньше 0 или равна")
+            return 
         session = get_session()
         new_payment = Payments(
             user_id=self.user.user_id,
@@ -276,7 +279,7 @@ class MainWindow(QWidget):
 
         self.date_to = QDateEdit()
         self.date_to.setCalendarPopup(True)
-        self.date_to.setDate(QDate(2015, 12, 31))
+        self.date_to.setDate(QDate(2018, 12, 31))
         self.date_to.setDisplayFormat("dd.MM.yyyy")  # Формат даты
         self.date_to.setFixedWidth(120)  # Увеличиваем ширину поля
         self.date_to.dateTimeChanged.connect(self.filter_by_date)  # Обработчик изменения даты
@@ -322,38 +325,50 @@ class MainWindow(QWidget):
         self.setLayout(self.layout)
 
         self.load_categories()
-        self.load_data()
-
-    def load_data(self):
-        """Загрузка данных с фильтрацией по дате и категории"""
+    def get_current_user_id(self):
+        """Метод для получения идентификатора текущего пользователя"""
+        # Реализуйте это в зависимости от вашего контекста. Например, это может быть вызов текущего сеанса пользователя
+        # В качестве примера, возвращаем некоторое значение. Замените на вашу логику получения пользователя.
+        return self.user.user_id if self.user.user_id else None
+    def load_data1(self):
+        print("Загрузка данных с фильтрацией по дате и пользователю")
+        """Загрузка данных с фильтрацией по дате и пользователю"""
         session = get_session()
 
         # Получаем значения из QDateEdit
-        date_from = self.date_from.date()
-        date_to = self.date_to.date()
-
-        # Преобразуем QDate в Python datetime.date объекты
-        date_from = date_from.toPython()  # Преобразуем в Python datetime.date
-        date_to = date_to.toPython()  # Преобразуем в Python datetime.date
+        date_from = self.date_from.date().toPython()
+        date_to = self.date_to.date().toPython()
 
         # Проверяем, что дата_from не позже даты_to
         if date_from > date_to:
             QMessageBox.warning(self, "Ошибка", "Дата начала не может быть позже даты окончания")
             return
 
-        # Фильтруем данные по дате
-        query = session.query(Payments).filter(Payments.date >= date_from, Payments.date <= date_to)
+        # Получаем идентификатор текущего пользователя
+        current_user_id = self.get_current_user_id()
 
-        # Если выбрана категория, фильтруем и по ней
-        category = self.category_combo.currentText()
-        if category != "-":
-            query = query.filter(Payments.category == category)
+        if not current_user_id:
+            QMessageBox.warning(self, "Ошибка", "Пользователь не авторизован.")
+            return
+
+        # Фильтруем данные по дате и пользователю
+        query = session.query(Payments).filter(
+            Payments.date >= date_from,
+            Payments.date <= date_to,
+            Payments.user_id == current_user_id  # Фильтрация по текущему пользователю
+        )
+
+        # Выводим сам запрос и текущего пользователя
+        print(f"Запрос для фильтрации: {query}")
+        print(f"Текущий пользователь: {self.user}")  # Здесь предполагается, что self.user содержит текущего пользователя
 
         # Получаем отфильтрованные данные
         payments = query.all()
 
         # Обновляем таблицу с данными
-        self.table.setRowCount(len(payments))  # Если нет данных, то количество строк = 0
+        self.table.setRowCount(0)  # Сначала очищаем таблицу
+        self.table.setRowCount(len(payments))  # Устанавливаем количество строк
+
         for row, payment in enumerate(payments):
             self.table.setItem(row, 0, QTableWidgetItem(payment.name))
             self.table.setItem(row, 1, QTableWidgetItem(str(payment.quantity)))
@@ -362,17 +377,18 @@ class MainWindow(QWidget):
             self.table.setItem(row, 4, QTableWidgetItem(payment.category))
 
         session.close()
-
     def filter_by_date(self):
-        print("Дата изменина")
         """Обновление данных на основе выбранной даты и категории"""
+        print("Дата изменена")
+        
+        
         # Сохраняем выбранные значения в свойствах объекта
         self.date_from_value = self.date_from.date().toPython()
         self.date_to_value = self.date_to.date().toPython()
         self.selected_category = self.category_combo.currentText()
-
+        
         # Вызываем метод загрузки данных
-        self.load_data()
+        self.load_data1()
 
     def load_categories(self):
         session = get_session()
@@ -524,6 +540,9 @@ class MainWindow(QWidget):
 
     def load_data(self):
         """Загрузка данных платежей"""
+        self.category_combo.setCurrentText('-')
+        self.date_from.setDate(QDate(2015, 1, 1))
+        self.date_to.setDate(QDate(2024, 1, 1))
         session = get_session()
         payments = session.query(Payments).filter(Payments.user_id == self.user.user_id).all()
         self.table.setRowCount(len(payments))
@@ -534,6 +553,7 @@ class MainWindow(QWidget):
             self.table.setItem(row, 3, QTableWidgetItem(f"{payment.total:.2f}"))
             self.table.setItem(row, 4, QTableWidgetItem(payment.category))
         session.close()
+        # self.
 
     def load_categories(self):
         """Загрузка категорий в выпадающий список"""
